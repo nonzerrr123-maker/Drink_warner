@@ -6,6 +6,8 @@ import { BellRing, Check, Download, Send, Share2 } from "lucide-react";
 import { useHydration } from "@/components/hydration-provider";
 import { Button } from "@/components/ui/button";
 import {
+  getHydrationPushContext,
+  getPushConfigSignature,
   PUSH_CONFIG_STORAGE_KEY,
   PUSH_RUN_STORAGE_KEY,
   VAPID_KEYS_STORAGE_KEY,
@@ -141,60 +143,6 @@ export function PushSetup() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!supported || permission !== "granted" || !hasSubscription) return;
-
-    const nextConfig = JSON.stringify(state.reminders);
-    if (window.localStorage.getItem(PUSH_CONFIG_STORAGE_KEY) === nextConfig) return;
-
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      try {
-        const vapid = readVapidKeys();
-        const subscription = await currentSubscription();
-        if (!vapid || !subscription) return;
-
-        const previousRunId = window.localStorage.getItem(PUSH_RUN_STORAGE_KEY);
-        const response = await fetch("/api/push", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "schedule",
-            subscription: subscriptionPayload(subscription),
-            vapid,
-            reminders: state.reminders,
-            timezone:
-              Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Bangkok",
-            previousRunId,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok || cancelled) return;
-
-        window.localStorage.setItem(PUSH_CONFIG_STORAGE_KEY, nextConfig);
-        if (data.runId) {
-          window.localStorage.setItem(PUSH_RUN_STORAGE_KEY, data.runId);
-          setHasSchedule(true);
-        } else {
-          window.localStorage.removeItem(PUSH_RUN_STORAGE_KEY);
-          setHasSchedule(false);
-        }
-      } catch {
-        // Keep local settings even if a background resync temporarily fails.
-      }
-    }, 700);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [
-    hasSubscription,
-    permission,
-    state.reminders,
-    supported,
-  ]);
-
   async function ensureSubscription() {
     let vapid = readVapidKeys();
     const registration = await navigator.serviceWorker.ready;
@@ -240,6 +188,7 @@ export function PushSetup() {
       const { vapid, subscription } = await ensureSubscription();
       setHasSubscription(true);
 
+      const now = new Date();
       const previousRunId = window.localStorage.getItem(PUSH_RUN_STORAGE_KEY);
       const response = await fetch("/api/push", {
         method: "POST",
@@ -249,6 +198,7 @@ export function PushSetup() {
           subscription: subscriptionPayload(subscription),
           vapid,
           reminders: state.reminders,
+          hydration: getHydrationPushContext(state, now),
           timezone:
             Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Bangkok",
           previousRunId,
@@ -259,13 +209,13 @@ export function PushSetup() {
 
       window.localStorage.setItem(
         PUSH_CONFIG_STORAGE_KEY,
-        JSON.stringify(state.reminders),
+        getPushConfigSignature(state, now),
       );
 
       if (data.runId) {
         window.localStorage.setItem(PUSH_RUN_STORAGE_KEY, data.runId);
         setHasSchedule(true);
-        setMessage("บันทึกการเตือนบนเครื่องนี้แล้ว");
+        setMessage("บันทึก Smart Reminder บนเครื่องนี้แล้ว");
       } else {
         window.localStorage.removeItem(PUSH_RUN_STORAGE_KEY);
         setHasSchedule(false);
@@ -360,10 +310,10 @@ export function PushSetup() {
         </div>
         <div>
           <h2 id="push-title" className="text-sm font-semibold">
-            แจ้งเตือนเมื่อปิดแอป
+            Smart Reminder
           </h2>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            ใช้ Web Push เพื่อให้เตือนบน Lock Screen และ Notification Center แม้ไม่ได้เปิด Drink Warner อยู่
+            Dewy จะดูเป้าหมายและน้ำที่บันทึกล่าสุดก่อนเตือน พร้อมเว้นรอบเมื่อคุณเพิ่งดื่มหรือครบเป้าแล้ว
           </p>
         </div>
       </div>
@@ -402,8 +352,8 @@ export function PushSetup() {
 
           <Button className="mt-3 w-full" onClick={syncSchedule} disabled={busy}>
             {hasSubscription
-              ? "บันทึกตารางการเตือนบนเครื่องนี้"
-              : "เปิดการแจ้งเตือนบนเครื่องนี้"}
+              ? "อัปเดต Smart Reminder"
+              : "เปิด Smart Reminder บนเครื่องนี้"}
           </Button>
 
           {hasSubscription && permission === "granted" ? (
