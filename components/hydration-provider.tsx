@@ -33,6 +33,7 @@ type HydrationContextValue = {
   setReminders: (next: Partial<ReminderSettings>) => void;
   setProfile: (next: Partial<UserProfile>) => void;
   setOnboardingCompleted: (completed: boolean) => void;
+  replaceState: (next: HydrationState) => void;
 };
 
 const HydrationContext = createContext<HydrationContextValue | null>(null);
@@ -150,6 +151,10 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const replaceState = useCallback((next: HydrationState) => {
+    setState(mergeHydrationState(next));
+  }, []);
+
   const value = useMemo(
     () => ({
       state,
@@ -161,6 +166,7 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
       setReminders,
       setProfile,
       setOnboardingCompleted,
+      replaceState,
     }),
     [
       state,
@@ -172,6 +178,7 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
       setReminders,
       setProfile,
       setOnboardingCompleted,
+      replaceState,
     ],
   );
 
