@@ -186,9 +186,13 @@ export function WaterHome() {
       <div className="px-5">
         <section className="pt-4 text-center" aria-labelledby="today-goal">
           <p id="today-goal" className="text-sm font-medium text-muted-foreground">เป้าหมายการดื่มน้ำ</p>
-          <div className="mt-5"><WaterProgress current={water} goal={state.dailyGoal} /></div>
-          <div className="-mt-2 flex h-[104px] items-center justify-center overflow-visible"><HydrationMascot key={`${mascotRun}-${mascotMode}`} mode={mascotMode} hydrationRatio={ratio} size={112} /></div>
-          <p className="mt-1 text-sm font-medium text-foreground">{statusText}</p>
+          <div className="relative mx-auto mt-5 max-w-[310px]">
+            <WaterProgress current={water} goal={state.dailyGoal} />
+            <div className="pointer-events-none absolute right-0 top-3 z-10">
+              <HydrationMascot key={`${mascotRun}-${mascotMode}`} mode={mascotMode} hydrationRatio={ratio} size={92} />
+            </div>
+          </div>
+          <p className="mt-4 text-sm font-medium text-foreground">{statusText}</p>
           <p className="mt-1 text-sm text-muted-foreground">{remaining > 0 ? `เหลืออีก ${remaining.toLocaleString()} ml` : `เกินเป้าแล้ว ${(water - state.dailyGoal).toLocaleString()} ml`}</p>
         </section>
 
