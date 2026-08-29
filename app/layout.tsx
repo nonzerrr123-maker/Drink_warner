@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { AppGate } from "@/components/app-gate";
 import { CloudSyncAgent } from "@/components/cloud-sync-agent";
 import { HydrationProvider } from "@/components/hydration-provider";
+import { PushSyncAgent } from "@/components/push-sync-agent";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
         <PwaRegister />
         <HydrationProvider>
           <CloudSyncAgent />
+          <PushSyncAgent />
           <AppGate>{children}</AppGate>
         </HydrationProvider>
       </body>
