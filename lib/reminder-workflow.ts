@@ -12,7 +12,7 @@ type ZonedParts = {
   minute: number;
 };
 
-type DeliveryResult = "sent" | "skip-recent" | "skip-goal";
+type DeliveryResult = "sent" | "skip-recent" | "skip-goal" | "expired";
 
 function parseTime(value: string) {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
@@ -257,7 +257,7 @@ async function deliverReminder(input: ReminderWorkflowInput): Promise<DeliveryRe
     tag: "drink-warner-reminder",
   });
 
-  return delivered ? "sent" : "skip-goal";
+  return delivered ? "sent" : "expired";
 }
 
 export async function hydrationReminderWorkflow(input: ReminderWorkflowInput) {
@@ -274,6 +274,10 @@ export async function hydrationReminderWorkflow(input: ReminderWorkflowInput) {
 
     const result = await deliverReminder(input);
     cycles += 1;
+
+    if (result === "expired") {
+      return { status: "subscription-expired", sent };
+    }
 
     if (result === "sent") sent += 1;
   }
