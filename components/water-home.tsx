@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronRight, Clock3, Droplet, Minus, Plus, RotateCcw } from "lucide-react";
 
+import { HydrationMascot, type MascotMode } from "@/components/hydration-mascot";
+import { MascotToast } from "@/components/mascot-toast";
 import { MobileShell } from "@/components/mobile-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -85,6 +87,14 @@ export function WaterHome() {
   const [undoLogId, setUndoLogId] = useState<string | null>(null);
   const [undoAmount, setUndoAmount] = useState<number | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [mascotMode, setMascotMode] = useState<MascotMode>("idle");
+  const [mascotRun, setMascotRun] = useState(0);
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastTitle, setToastTitle] = useState("");
+  const [toastDescription, setToastDescription] = useState("");
+  const [toastMascotMode, setToastMascotMode] = useState<"drink" | "celebrate">("drink");
+  const mascotTimerRef = useRef<number | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const today = dateKey(now);
   const logs = getDayLogs(state, today);
@@ -106,6 +116,13 @@ export function WaterHome() {
     }, 5000);
     return () => window.clearTimeout(timer);
   }, [undoLogId]);
+
+  useEffect(() => {
+    return () => {
+      if (mascotTimerRef.current) window.clearTimeout(mascotTimerRef.current);
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   if (!ready) {
     return (
@@ -130,7 +147,34 @@ export function WaterHome() {
             ? "ค่อย ๆ ดื่มให้สม่ำเสมอ"
             : "เริ่มต้นด้วยน้ำแก้วแรกของวันนี้";
 
+  function playFeedback(nextAmount: number) {
+    const nextWater = water + nextAmount;
+    const reachedGoal = water < state.dailyGoal && nextWater >= state.dailyGoal;
+    const mode: "drink" | "celebrate" = reachedGoal ? "celebrate" : "drink";
+
+    if (mascotTimerRef.current) window.clearTimeout(mascotTimerRef.current);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+
+    setMascotMode(mode);
+    setMascotRun((current) => current + 1);
+    setToastMascotMode(mode);
+    setToastTitle(reachedGoal ? "ถึงเป้าหมายวันนี้แล้ว ✨" : `เพิ่ม ${nextAmount.toLocaleString()} ml แล้ว`);
+    setToastDescription(
+      reachedGoal
+        ? `Dewy ฉลองให้คุณ — วันนี้ครบ ${state.dailyGoal.toLocaleString()} ml แล้ว`
+        : "บันทึกเรียบร้อย ดื่มต่อเนื่องแบบสบาย ๆ ได้เลย",
+    );
+    setToastOpen(true);
+
+    mascotTimerRef.current = window.setTimeout(
+      () => setMascotMode("idle"),
+      reachedGoal ? 1250 : 1050,
+    );
+    toastTimerRef.current = window.setTimeout(() => setToastOpen(false), 2300);
+  }
+
   function recordDrink(nextAmount: number) {
+    playFeedback(nextAmount);
     const log = addDrink(nextAmount);
     setUndoLogId(log.id);
     setUndoAmount(log.amount);
@@ -166,15 +210,25 @@ export function WaterHome() {
             เป้าหมายการดื่มน้ำ
           </p>
 
-          <div className="mt-5">
+          <div className="relative mx-auto mt-5 w-[232px] pb-5">
             <WaterProgress current={water} goal={state.dailyGoal} />
+            <div className="pointer-events-none absolute -bottom-1 right-0 flex size-[88px] items-center justify-center">
+              <HydrationMascot
+                key={`${mascotMode}-${mascotRun}`}
+                mode={mascotMode}
+                size={92}
+                subtle
+              />
+            </div>
           </div>
 
-          <p className="mt-4 text-sm font-medium text-foreground">{statusText}</p>
+          <p className="mt-2 text-sm font-medium text-foreground">{statusText}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             {remaining > 0
               ? `เหลืออีก ${remaining.toLocaleString()} ml`
-              : `เกินเป้าแล้ว ${(water - state.dailyGoal).toLocaleString()} ml`}
+              : water === state.dailyGoal
+                ? "ทำได้ตามเป้าหมายแล้ว"
+                : `เกินเป้าแล้ว ${(water - state.dailyGoal).toLocaleString()} ml`}
           </p>
         </section>
 
@@ -348,6 +402,13 @@ export function WaterHome() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <MascotToast
+        open={toastOpen}
+        title={toastTitle}
+        description={toastDescription}
+        mascotMode={toastMascotMode}
+      />
     </MobileShell>
   );
 }
