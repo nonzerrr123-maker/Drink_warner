@@ -1,17 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  Bell,
-  ChartNoAxesColumnIncreasing,
-  Clock3,
-  Droplet,
-  Home,
-  Minus,
-  Plus,
-  Settings2,
-} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Bell, ChevronRight, Clock3, Droplet, Minus, Plus, RotateCcw } from "lucide-react";
 
+import { MobileShell } from "@/components/mobile-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -21,30 +14,25 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
-
-const DAILY_GOAL = 2000;
-const QUICK_AMOUNTS = [150, 250, 350];
-const SHEET_AMOUNTS = [150, 250, 350, 500];
-
-type DrinkLog = {
-  amount: number;
-  time: string;
-};
-
-const initialLogs: DrinkLog[] = [
-  { amount: 250, time: "13:48" },
-  { amount: 350, time: "11:32" },
-  { amount: 250, time: "09:10" },
-];
+import { useHydration } from "@/components/hydration-provider";
+import {
+  dateKey,
+  formatLogTime,
+  formatRelativeMinutes,
+  formatThaiFullDate,
+  getDayLogs,
+  getDayTotal,
+  getNextReminderDate,
+} from "@/lib/hydration";
 
 function WaterProgress({ current, goal }: { current: number; goal: number }) {
   const size = 184;
   const stroke = 10;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const percentage = Math.min(Math.round((current / goal) * 100), 100);
-  const dashOffset = circumference - (percentage / 100) * circumference;
+  const rawPercentage = goal > 0 ? Math.round((current / goal) * 100) : 0;
+  const visualPercentage = Math.min(rawPercentage, 100);
+  const dashOffset = circumference - (visualPercentage / 100) * circumference;
 
   return (
     <div
@@ -55,11 +43,7 @@ function WaterProgress({ current, goal }: { current: number; goal: number }) {
       aria-valuemax={goal}
       aria-valuenow={current}
     >
-      <svg
-        viewBox={`0 0 ${size} ${size}`}
-        className="size-full -rotate-90"
-        aria-hidden="true"
-      >
+      <svg viewBox={`0 0 ${size} ${size}`} className="size-full -rotate-90" aria-hidden="true">
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -88,196 +72,213 @@ function WaterProgress({ current, goal }: { current: number; goal: number }) {
           {current.toLocaleString()}
         </span>
         <span className="mt-1 text-sm text-muted-foreground">จาก {goal.toLocaleString()} ml</span>
-        <span className="mt-2 text-xs font-medium text-primary">{percentage}%</span>
+        <span className="mt-2 text-xs font-medium text-primary">{rawPercentage}%</span>
       </div>
     </div>
   );
 }
 
 export function WaterHome() {
-  const [water, setWater] = useState(1250);
-  const [logs, setLogs] = useState<DrinkLog[]>(initialLogs);
+  const { state, addDrink, removeDrink } = useHydration();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [amount, setAmount] = useState(250);
+  const [undoLogId, setUndoLogId] = useState<string | null>(null);
+  const [undoAmount, setUndoAmount] = useState<number | null>(null);
+  const [now, setNow] = useState(() => new Date());
 
-  const remaining = Math.max(DAILY_GOAL - water, 0);
-  const percentage = Math.min(Math.round((water / DAILY_GOAL) * 100), 100);
+  const today = dateKey(now);
+  const logs = getDayLogs(state, today);
+  const water = getDayTotal(state, today);
+  const remaining = Math.max(state.dailyGoal - water, 0);
+  const percentage = state.dailyGoal > 0 ? Math.round((water / state.dailyGoal) * 100) : 0;
+  const nextReminder = getNextReminderDate(state.reminders, now);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!undoLogId) return;
+    const timer = window.setTimeout(() => {
+      setUndoLogId(null);
+      setUndoAmount(null);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [undoLogId]);
 
   const statusText = useMemo(() => {
     if (percentage >= 100) return "ครบเป้าหมายวันนี้แล้ว";
     if (percentage >= 70) return "ใกล้ถึงเป้าหมายแล้ว";
     if (percentage >= 40) return "กำลังไปได้ดี";
-    return "ค่อย ๆ ดื่มให้สม่ำเสมอ";
+    if (percentage > 0) return "ค่อย ๆ ดื่มให้สม่ำเสมอ";
+    return "เริ่มต้นด้วยน้ำแก้วแรกของวันนี้";
   }, [percentage]);
+
+  function recordDrink(nextAmount: number) {
+    const log = addDrink(nextAmount);
+    setUndoLogId(log.id);
+    setUndoAmount(log.amount);
+  }
 
   function openAddSheet(nextAmount = 250) {
     setAmount(nextAmount);
     setSheetOpen(true);
   }
 
-  function saveDrink() {
-    const nextWater = Math.min(water + amount, DAILY_GOAL);
-    const actualAdded = nextWater - water;
-
-    if (actualAdded <= 0) {
-      setSheetOpen(false);
-      return;
-    }
-
-    const time = new Intl.DateTimeFormat("th-TH", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date());
-
-    setWater(nextWater);
-    setLogs((currentLogs) => [
-      { amount: actualAdded, time },
-      ...currentLogs,
-    ]);
+  function saveCustomDrink() {
+    recordDrink(amount);
     setSheetOpen(false);
   }
 
+  function undoLastDrink() {
+    if (!undoLogId) return;
+    removeDrink(undoLogId, today);
+    setUndoLogId(null);
+    setUndoAmount(null);
+  }
+
   return (
-    <main className="min-h-dvh bg-muted/45 sm:px-4 sm:py-5">
-      <div className="mx-auto min-h-dvh w-full max-w-[430px] bg-background sm:min-h-[calc(100dvh-2.5rem)] sm:overflow-hidden sm:rounded-[28px] sm:border sm:border-border">
-        <header className="flex items-start justify-between px-5 pb-2 pt-6">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Drink Warner</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-foreground">
-              วันนี้
-            </h1>
+    <MobileShell>
+      <header className="px-5 pb-2 pt-6">
+        <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">วันนี้</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{formatThaiFullDate(now)}</p>
+      </header>
+
+      <div className="px-5">
+        <section className="pt-4 text-center" aria-labelledby="today-goal">
+          <p id="today-goal" className="text-sm font-medium text-muted-foreground">
+            เป้าหมายการดื่มน้ำ
+          </p>
+
+          <div className="mt-5">
+            <WaterProgress current={water} goal={state.dailyGoal} />
           </div>
 
-          <Button variant="ghost" size="icon" aria-label="การแจ้งเตือน">
-            <Bell className="size-5" />
+          <p className="mt-4 text-sm font-medium text-foreground">{statusText}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {remaining > 0
+              ? `เหลืออีก ${remaining.toLocaleString()} ml`
+              : `เกินเป้าแล้ว ${(water - state.dailyGoal).toLocaleString()} ml`}
+          </p>
+        </section>
+
+        <section className="mt-7" aria-labelledby="quick-add">
+          <Button size="lg" className="w-full rounded-2xl" onClick={() => openAddSheet()}>
+            <Plus className="size-4" />
+            บันทึกการดื่มน้ำ
           </Button>
-        </header>
 
-        <div className="px-5 pb-28">
-          <section className="pt-4 text-center" aria-labelledby="today-goal">
-            <p id="today-goal" className="text-sm font-medium text-muted-foreground">
-              เป้าหมายการดื่มน้ำ
-            </p>
+          <div className="mt-3 grid grid-cols-3 gap-2" aria-labelledby="quick-add">
+            <span id="quick-add" className="sr-only">
+              เพิ่มปริมาณน้ำแบบด่วน
+            </span>
+            {state.quickAmounts.map((quickAmount) => (
+              <Button
+                key={quickAmount}
+                variant="secondary"
+                className="h-10 rounded-xl px-2 text-xs"
+                onClick={() => recordDrink(quickAmount)}
+              >
+                +{quickAmount} ml
+              </Button>
+            ))}
+          </div>
+        </section>
 
-            <div className="mt-5">
-              <WaterProgress current={water} goal={DAILY_GOAL} />
-            </div>
-
-            <p className="mt-4 text-sm font-medium text-foreground">{statusText}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {remaining > 0 ? `เหลืออีก ${remaining.toLocaleString()} ml` : "ทำได้ตามเป้าหมายแล้ว"}
-            </p>
-          </section>
-
-          <section className="mt-7" aria-labelledby="quick-add">
-            <Button
-              size="lg"
-              className="w-full rounded-2xl"
-              onClick={() => openAddSheet()}
-              disabled={water >= DAILY_GOAL}
-            >
-              <Plus className="size-4" />
-              บันทึกการดื่มน้ำ
+        {undoLogId && undoAmount ? (
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-secondary/70 px-3 py-2.5 text-sm" role="status">
+            <span>เพิ่ม {undoAmount} ml แล้ว</span>
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-primary" onClick={undoLastDrink}>
+              <RotateCcw className="size-3.5" />
+              ย้อนกลับ
             </Button>
+          </div>
+        ) : null}
 
-            <div className="mt-3 grid grid-cols-3 gap-2" aria-labelledby="quick-add">
-              <span id="quick-add" className="sr-only">
-                เพิ่มปริมาณน้ำแบบด่วน
-              </span>
-              {QUICK_AMOUNTS.map((quickAmount) => (
-                <Button
-                  key={quickAmount}
-                  variant="secondary"
-                  className="h-10 rounded-xl px-2 text-xs"
-                  onClick={() => openAddSheet(quickAmount)}
-                  disabled={water >= DAILY_GOAL}
-                >
-                  +{quickAmount} ml
-                </Button>
-              ))}
-            </div>
-          </section>
+        <section className="mt-8" aria-labelledby="next-reminder">
+          <h2 id="next-reminder" className="mb-3 text-base font-semibold tracking-[-0.02em]">
+            การเตือนครั้งถัดไป
+          </h2>
 
-          <section className="mt-8" aria-labelledby="next-reminder">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 id="next-reminder" className="text-base font-semibold tracking-[-0.02em]">
-                การเตือนครั้งถัดไป
-              </h2>
-            </div>
-
-            <Card className="border-0 bg-secondary/70 shadow-none">
+          <Link href="/reminders" className="block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Card className="border-0 bg-secondary/70 shadow-none transition hover:bg-secondary">
               <CardContent className="flex items-center gap-4 py-4">
                 <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-background text-primary">
                   <Bell className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-xl font-semibold tracking-[-0.03em]">14:30</p>
-                    <span className="text-xs font-medium text-muted-foreground">เปิดอยู่</span>
-                  </div>
-                  <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Clock3 className="size-3.5" />
-                    เตือนทุก 2 ชั่วโมง
-                  </p>
+                  {nextReminder ? (
+                    <>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p className="text-xl font-semibold tracking-[-0.03em]">
+                          {new Intl.DateTimeFormat("th-TH", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: false,
+                          }).format(nextReminder)}
+                        </p>
+                        <ChevronRight className="size-4 text-muted-foreground" />
+                      </div>
+                      <p className="mt-1 text-sm font-medium text-foreground">
+                        {formatRelativeMinutes(nextReminder, now)}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock3 className="size-3.5" />
+                        ทุก {state.reminders.intervalHours} ชั่วโมง · {state.reminders.startTime}–{state.reminders.endTime}
+                      </p>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold">ปิดการเตือนอยู่</p>
+                        <p className="mt-1 text-xs text-muted-foreground">แตะเพื่อตั้งเวลาเตือน</p>
+                      </div>
+                      <ChevronRight className="size-4 text-muted-foreground" />
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
-          </section>
+          </Link>
+        </section>
 
-          <section className="mt-8" aria-labelledby="today-history">
-            <div className="flex items-center justify-between">
-              <h2 id="today-history" className="text-base font-semibold tracking-[-0.02em]">
-                วันนี้
-              </h2>
-              <span className="text-xs text-muted-foreground">{logs.length} รายการ</span>
-            </div>
+        <section className="mt-8" aria-labelledby="today-history">
+          <div className="flex items-center justify-between">
+            <h2 id="today-history" className="text-base font-semibold tracking-[-0.02em]">
+              วันนี้
+            </h2>
+            <Link href="/history" className="flex items-center gap-0.5 text-xs font-medium text-primary">
+              ดูทั้งหมด
+              <ChevronRight className="size-3.5" />
+            </Link>
+          </div>
 
+          {logs.length > 0 ? (
             <div className="mt-2 divide-y divide-border/80">
-              {logs.slice(0, 4).map((log, index) => (
-                <div
-                  key={`${log.time}-${log.amount}-${index}`}
-                  className="flex items-center gap-3 py-3.5"
-                >
+              {logs.slice(0, 3).map((log) => (
+                <div key={log.id} className="flex items-center gap-3 py-3.5">
                   <div className="flex size-9 items-center justify-center rounded-full bg-secondary text-primary">
                     <Droplet className="size-4" />
                   </div>
                   <div className="flex flex-1 items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-foreground">น้ำเปล่า</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{log.time} น.</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{formatLogTime(log.at)} น.</p>
                     </div>
-                    <p className="text-sm font-semibold tabular-nums text-foreground">
-                      {log.amount} ml
-                    </p>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{log.amount} ml</p>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
-        </div>
-
-        <nav className="fixed bottom-0 left-1/2 z-40 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-4 border-t border-border bg-background px-3 pb-[calc(.65rem+env(safe-area-inset-bottom))] pt-2 sm:bottom-5 sm:rounded-b-[28px]" aria-label="เมนูหลัก">
-          {[
-            { label: "วันนี้", icon: Home, active: true },
-            { label: "ประวัติ", icon: ChartNoAxesColumnIncreasing },
-            { label: "เตือน", icon: Bell },
-            { label: "ตั้งค่า", icon: Settings2 },
-          ].map((item) => (
-            <Button
-              key={item.label}
-              variant="ghost"
-              className={cn(
-                "h-auto flex-col gap-1 rounded-xl py-1.5 text-[11px]",
-                item.active && "bg-secondary text-primary hover:bg-secondary hover:text-primary",
-              )}
-              aria-current={item.active ? "page" : undefined}
-            >
-              <item.icon className="size-[18px]" />
-              {item.label}
-            </Button>
-          ))}
-        </nav>
+          ) : (
+            <div className="mt-3 rounded-2xl border border-dashed border-border px-4 py-5 text-center">
+              <Droplet className="mx-auto size-5 text-primary" />
+              <p className="mt-2 text-sm font-medium">ยังไม่มีรายการวันนี้</p>
+              <p className="mt-1 text-xs text-muted-foreground">บันทึกแก้วแรกแล้วรายการจะมาอยู่ตรงนี้</p>
+            </div>
+          )}
+        </section>
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -307,14 +308,14 @@ export function WaterHome() {
                 variant="outline"
                 size="icon"
                 aria-label="เพิ่ม 50 มิลลิลิตร"
-                onClick={() => setAmount((current) => Math.min(1000, current + 50))}
+                onClick={() => setAmount((current) => Math.min(1500, current + 50))}
               >
                 <Plus />
               </Button>
             </div>
 
             <div className="mt-7 grid grid-cols-4 gap-2">
-              {SHEET_AMOUNTS.map((preset) => (
+              {[150, 250, 350, 500].map((preset) => (
                 <Button
                   key={preset}
                   variant={preset === amount ? "default" : "secondary"}
@@ -326,12 +327,12 @@ export function WaterHome() {
               ))}
             </div>
 
-            <Button size="lg" className="mt-5 w-full rounded-2xl" onClick={saveDrink}>
+            <Button size="lg" className="mt-5 w-full rounded-2xl" onClick={saveCustomDrink}>
               บันทึก {amount} ml
             </Button>
           </div>
         </SheetContent>
       </Sheet>
-    </main>
+    </MobileShell>
   );
 }

@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+
+import { HydrationProvider } from "@/components/hydration-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +21,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body>{children}</body>
+      <body>
+        <HydrationProvider>{children}</HydrationProvider>
+      </body>
     </html>
   );
 }
