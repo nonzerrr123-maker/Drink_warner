@@ -25,6 +25,7 @@ export type HydrationState = {
   days: Record<string, DrinkLog[]>;
   reminders: ReminderSettings;
   profile: UserProfile;
+  onboardingCompleted: boolean;
 };
 
 export const STORAGE_KEY = "drink-warner:hydration:v1";
@@ -44,6 +45,7 @@ export const DEFAULT_HYDRATION_STATE: HydrationState = {
     sex: "unspecified",
     age: null,
   },
+  onboardingCompleted: false,
 };
 
 export function dateKey(date = new Date()) {
@@ -210,5 +212,6 @@ export function mergeHydrationState(value: unknown): HydrationState {
       ...DEFAULT_HYDRATION_STATE.profile,
       ...(candidate.profile ?? {}),
     },
+    onboardingCompleted: Boolean(candidate.onboardingCompleted),
   };
 }
