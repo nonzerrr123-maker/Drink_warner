@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calculator, Droplet, UserRound } from "lucide-react";
 
 import { useHydration } from "@/components/hydration-provider";
+import { MascotToast } from "@/components/mascot-toast";
 import { MobileShell } from "@/components/mobile-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,9 @@ export function AppSettings() {
     String(state.quickAmounts[1]),
     String(state.quickAmounts[2]),
   ]);
+  const [goalToastOpen, setGoalToastOpen] = useState(false);
+  const [goalToastDescription, setGoalToastDescription] = useState("");
+  const goalToastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -31,17 +35,42 @@ export function AppSettings() {
     setQuickDrafts(state.quickAmounts.map(String) as [string, string, string]);
   }, [ready, state.dailyGoal, state.quickAmounts]);
 
+  useEffect(() => {
+    return () => {
+      if (goalToastTimerRef.current) window.clearTimeout(goalToastTimerRef.current);
+    };
+  }, []);
+
   const recommendedGoal = useMemo(
     () => calculateRecommendedGoal(state.profile),
     [state.profile],
   );
 
+  function showGoalSaved(goal: number, source: "manual" | "recommended") {
+    if (goalToastTimerRef.current) window.clearTimeout(goalToastTimerRef.current);
+
+    setGoalToastDescription(
+      source === "recommended"
+        ? `ใช้เป้าหมายแนะนำ ${goal.toLocaleString()} ml/วัน เรียบร้อยแล้ว`
+        : `เป้าหมายใหม่คือ ${goal.toLocaleString()} ml/วัน`,
+    );
+    setGoalToastOpen(true);
+    goalToastTimerRef.current = window.setTimeout(() => setGoalToastOpen(false), 2400);
+  }
+
+  function applyDailyGoal(goal: number, source: "manual" | "recommended", alwaysConfirm = false) {
+    const normalized = Math.min(6000, Math.max(500, Math.round(goal / 50) * 50));
+    const changed = normalized !== state.dailyGoal;
+    setDailyGoal(normalized);
+    setGoalDraft(String(normalized));
+
+    if (changed || alwaysConfirm) showGoalSaved(normalized, source);
+  }
+
   function saveGoalDraft() {
     const parsed = Number(goalDraft);
     if (Number.isFinite(parsed) && parsed > 0) {
-      const normalized = Math.min(6000, Math.max(500, Math.round(parsed / 50) * 50));
-      setDailyGoal(normalized);
-      setGoalDraft(String(normalized));
+      applyDailyGoal(parsed, "manual");
     } else {
       setGoalDraft(String(state.dailyGoal));
     }
@@ -92,6 +121,9 @@ export function AppSettings() {
               value={goalDraft}
               onChange={(event) => setGoalDraft(event.target.value.replace(/[^0-9]/g, ""))}
               onBlur={saveGoalDraft}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
               aria-label="เป้าหมายมิลลิลิตรต่อวัน"
             />
             <div className="flex h-11 items-center rounded-xl bg-muted px-3 text-sm text-muted-foreground">ml</div>
@@ -168,7 +200,10 @@ export function AppSettings() {
                     <p className="mt-1 text-2xl font-semibold tracking-[-0.035em]">
                       {recommendedGoal.toLocaleString()} ml/วัน
                     </p>
-                    <Button className="mt-3 h-9 w-full rounded-xl" onClick={() => { setDailyGoal(recommendedGoal); setGoalDraft(String(recommendedGoal)); }}>
+                    <Button
+                      className="mt-3 h-9 w-full rounded-xl"
+                      onClick={() => applyDailyGoal(recommendedGoal, "recommended", true)}
+                    >
                       ใช้เป้าหมายนี้
                     </Button>
                   </>
@@ -211,6 +246,9 @@ export function AppSettings() {
                     });
                   }}
                   onBlur={() => saveQuickAmount(index)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
                 />
               </label>
             ))}
@@ -224,6 +262,13 @@ export function AppSettings() {
           </p>
         </section>
       </div>
+
+      <MascotToast
+        open={goalToastOpen}
+        title="ตั้งเป้าหมายสำเร็จแล้ว"
+        description={goalToastDescription}
+        mascotMode="celebrate"
+      />
     </MobileShell>
   );
 }
