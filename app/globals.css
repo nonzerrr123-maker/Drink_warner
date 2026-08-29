@@ -1,12 +1,60 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: oklch(0.988 0.008 190);
+  --foreground: oklch(0.28 0.025 215);
+  --card: oklch(0.998 0.003 190);
+  --card-foreground: oklch(0.28 0.025 215);
+  --primary: oklch(0.72 0.09 205);
+  --primary-foreground: oklch(0.22 0.035 215);
+  --secondary: oklch(0.95 0.03 195);
+  --secondary-foreground: oklch(0.34 0.04 210);
+  --muted: oklch(0.965 0.015 190);
+  --muted-foreground: oklch(0.53 0.025 210);
+  --accent: oklch(0.94 0.035 205);
+  --accent-foreground: oklch(0.31 0.04 215);
+  --destructive: oklch(0.63 0.18 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.91 0.018 200);
+  --input: oklch(0.91 0.018 200);
+  --ring: oklch(0.72 0.09 205);
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-xs: calc(var(--radius) * 0.5);
+  --radius-sm: calc(var(--radius) * 0.75);
+  --radius-md: calc(var(--radius) * 0.875);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.5);
+  --radius-2xl: calc(var(--radius) * 2);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", sans-serif;
 }
 
 * {
   box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html {
+  background: var(--muted);
 }
 
 html,
@@ -16,7 +64,20 @@ body {
 }
 
 body {
+  min-width: 320px;
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--secondary);
+  color: var(--foreground);
 }
