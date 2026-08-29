@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Bell, BellOff, Clock3 } from "lucide-react";
 
 import { useHydration } from "@/components/hydration-provider";
 import { MobileShell } from "@/components/mobile-shell";
+import { PushSetup } from "@/components/push-setup";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,16 +12,7 @@ import { formatRelativeMinutes, getNextReminderDate } from "@/lib/hydration";
 
 export function ReminderSettingsScreen() {
   const { state, ready, setReminders } = useHydration();
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    if (!("Notification" in window)) setPermission("unsupported");
-    else setPermission(Notification.permission);
-
-    const timer = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const now = new Date();
 
   if (!ready) {
     return (
@@ -35,12 +26,6 @@ export function ReminderSettingsScreen() {
   }
 
   const nextReminder = getNextReminderDate(state.reminders, now);
-
-  async function requestPermission() {
-    if (!("Notification" in window)) return;
-    const result = await Notification.requestPermission();
-    setPermission(result);
-  }
 
   return (
     <MobileShell>
@@ -137,26 +122,13 @@ export function ReminderSettingsScreen() {
           </Card>
         </section>
 
-        <section className="mt-7 rounded-2xl border border-border p-4" aria-labelledby="notification-permission">
-          <h2 id="notification-permission" className="text-sm font-semibold">การแจ้งเตือนของเบราว์เซอร์</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            อนุญาตให้เว็บแสดง Notification ตามเวลาที่ตั้งไว้ ขณะเว็บหรือ PWA ยังเปิดทำงานอยู่
-          </p>
+        <div className="mt-7">
+          <PushSetup />
+        </div>
 
-          {permission === "granted" ? (
-            <p className="mt-3 text-sm font-medium text-primary">อนุญาตแล้ว ✓</p>
-          ) : permission === "unsupported" ? (
-            <p className="mt-3 text-sm text-muted-foreground">เบราว์เซอร์นี้ไม่รองรับ Notification</p>
-          ) : (
-            <Button variant="outline" className="mt-3 w-full" onClick={requestPermission}>
-              ขอสิทธิ์แจ้งเตือน
-            </Button>
-          )}
-
-          <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
-            การแจ้งเตือนเมื่อปิดเว็บสนิทจะต้องต่อระบบ Web Push/Backend เพิ่มในขั้นถัดไป
-          </p>
-        </section>
+        <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
+          บน iPhone/iPad ต้องเป็น iOS/iPadOS 16.4 ขึ้นไปและติดตั้งเว็บลงหน้าจอโฮมก่อนจึงจะรับ Web Push ได้
+        </p>
       </div>
     </MobileShell>
   );

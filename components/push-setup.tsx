@@ -1,0 +1,257 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { BellRing, Check, Download, Send, Share2 } from "lucide-react";
+
+import { useHydration } from "@/components/hydration-provider";
+import { Button } from "@/components/ui/button";
+import {
+  PUSH_RUN_STORAGE_KEY,
+  VAPID_PUBLIC_KEY,
+  type PushSubscriptionPayload,
+} from "@/lib/push";
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+function subscriptionPayload(subscription: PushSubscription): PushSubscriptionPayload {
+  const json = subscription.toJSON();
+  return {
+    endpoint: subscription.endpoint,
+    expirationTime: subscription.expirationTime,
+    keys: {
+      p256dh: json.keys?.p256dh ?? "",
+      auth: json.keys?.auth ?? "",
+    },
+  };
+}
+
+export function PushSetup() {
+  const { state } = useHydration();
+  const [isIos, setIsIos] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const [hasSubscription, setHasSubscription] = useState(false);
+  const [hasSchedule, setHasSchedule] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
+    const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+    setIsIos(ios);
+    setIsStandalone(standalone);
+    setSupported(pushSupported);
+    setPermission("Notification" in window ? Notification.permission : "unsupported");
+    setHasSchedule(Boolean(window.localStorage.getItem(PUSH_RUN_STORAGE_KEY)));
+
+    if (pushSupported) {
+      navigator.serviceWorker.ready
+        .then((registration) => registration.pushManager.getSubscription())
+        .then((subscription) => setHasSubscription(Boolean(subscription)))
+        .catch(() => setHasSubscription(false));
+    }
+
+    fetch("/api/push")
+      .then((response) => response.json())
+      .then((data) => setConfigured(Boolean(data.configured)))
+      .catch(() => setConfigured(false));
+  }, []);
+
+  async function getOrCreateSubscription() {
+    const registration = await navigator.serviceWorker.ready;
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) return existing;
+
+    return registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+
+  async function syncSchedule() {
+    if (!supported) return;
+    if (isIos && !isStandalone) {
+      setMessage("บน iPhone ต้องติดตั้งลงหน้าจอโฮมก่อน จึงจะเปิด Web Push ได้");
+      return;
+    }
+    if (!configured) {
+      setMessage("ระบบ Push ฝั่งเซิร์ฟเวอร์ยังไม่ได้ใส่ VAPID private key");
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = Notification.permission === "granted"
+        ? "granted"
+        : await Notification.requestPermission();
+      setPermission(result);
+      if (result !== "granted") {
+        setMessage("ยังไม่ได้อนุญาต Notification บนอุปกรณ์นี้");
+        return;
+      }
+
+      const subscription = await getOrCreateSubscription();
+      setHasSubscription(true);
+      const previousRunId = window.localStorage.getItem(PUSH_RUN_STORAGE_KEY);
+      const response = await fetch("/api/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "schedule",
+          subscription: subscriptionPayload(subscription),
+          reminders: state.reminders,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Bangkok",
+          previousRunId,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "ตั้งการแจ้งเตือนไม่สำเร็จ");
+
+      if (data.runId) {
+        window.localStorage.setItem(PUSH_RUN_STORAGE_KEY, data.runId);
+        setHasSchedule(true);
+        setMessage("บันทึกการเตือนบนเครื่องนี้แล้ว");
+      } else {
+        window.localStorage.removeItem(PUSH_RUN_STORAGE_KEY);
+        setHasSchedule(false);
+        setMessage("ปิดตารางการเตือนบนเครื่องนี้แล้ว");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ตั้งการแจ้งเตือนไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendTest() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) throw new Error("ยังไม่ได้เปิด Web Push บนเครื่องนี้");
+
+      const response = await fetch("/api/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test",
+          subscription: subscriptionPayload(subscription),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "ส่งทดสอบไม่สำเร็จ");
+      setMessage("ส่งแจ้งเตือนทดสอบแล้ว ลองดู Notification Center ได้เลย");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ส่งทดสอบไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disablePush() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const previousRunId = window.localStorage.getItem(PUSH_RUN_STORAGE_KEY);
+      await fetch("/api/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel", previousRunId }),
+      });
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      await subscription?.unsubscribe();
+      window.localStorage.removeItem(PUSH_RUN_STORAGE_KEY);
+      setHasSubscription(false);
+      setHasSchedule(false);
+      setMessage("ยกเลิก Web Push บนเครื่องนี้แล้ว");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!supported) {
+    return (
+      <section className="rounded-2xl border border-border p-4">
+        <p className="text-sm font-semibold">Web Push</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">เบราว์เซอร์หรืออุปกรณ์นี้ยังไม่รองรับ Web Push</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-border p-4" aria-labelledby="push-title">
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+          <BellRing className="size-4" />
+        </div>
+        <div>
+          <h2 id="push-title" className="text-sm font-semibold">แจ้งเตือนเมื่อปิดแอป</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            ใช้ Web Push เพื่อให้เตือนบน Lock Screen และ Notification Center แม้ไม่ได้เปิด Drink Warner อยู่
+          </p>
+        </div>
+      </div>
+
+      {isIos && !isStandalone ? (
+        <div className="mt-4 rounded-2xl bg-secondary/65 p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Download className="size-4 text-primary" />
+            ติดตั้งบน iPhone ก่อน
+          </div>
+          <ol className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
+            <li>1. เปิดลิงก์นี้ใน Safari</li>
+            <li className="flex items-center gap-1.5">2. แตะปุ่ม <Share2 className="size-3.5" /> แชร์</li>
+            <li>3. เลือก “เพิ่มไปยังหน้าจอโฮม”</li>
+            <li>4. เปิด Drink Warner จากไอคอนที่หน้าจอโฮม แล้วกลับมาหน้านี้</li>
+          </ol>
+        </div>
+      ) : (
+        <>
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-muted px-3 py-2.5 text-xs">
+            <span className="text-muted-foreground">สถานะบนเครื่องนี้</span>
+            <span className="flex items-center gap-1 font-medium text-foreground">
+              {hasSchedule && permission === "granted" ? <><Check className="size-3.5 text-primary" /> พร้อมเตือน</> : "ยังไม่เปิด"}
+            </span>
+          </div>
+
+          <Button className="mt-3 w-full" onClick={syncSchedule} disabled={busy || configured === null}>
+            {hasSubscription ? "อัปเดตการเตือนบนเครื่องนี้" : "เปิดการแจ้งเตือนบนเครื่องนี้"}
+          </Button>
+
+          {hasSubscription && permission === "granted" ? (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={sendTest} disabled={busy}>
+                <Send className="size-4" /> ทดสอบ
+              </Button>
+              <Button variant="outline" onClick={disablePush} disabled={busy}>
+                ยกเลิก Push
+              </Button>
+            </div>
+          ) : null}
+        </>
+      )}
+
+      {configured === false ? (
+        <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
+          เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า VAPID key จึงติดตั้ง PWA ได้แล้ว แต่ Web Push จะเริ่มทำงานหลังตั้งค่า secret บน Vercel
+        </p>
+      ) : null}
+
+      {message ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{message}</p> : null}
+    </section>
+  );
+}

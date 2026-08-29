@@ -21,6 +21,7 @@ import {
   isReminderMoment,
   mergeHydrationState,
 } from "@/lib/hydration";
+import { PUSH_RUN_STORAGE_KEY } from "@/lib/push";
 
 type HydrationContextValue = {
   state: HydrationState;
@@ -60,6 +61,7 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
     if (!ready || !state.reminders.enabled) return;
 
     const checkReminder = () => {
+      if (window.localStorage.getItem(PUSH_RUN_STORAGE_KEY)) return;
       if (!("Notification" in window) || Notification.permission !== "granted") return;
 
       const now = new Date();
@@ -71,6 +73,7 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
       lastNotificationRef.current = notificationKey;
       new Notification("ถึงเวลาดื่มน้ำแล้ว 💧", {
         body: "พักสักครู่แล้วเติมน้ำให้ร่างกายกัน",
+        icon: "/icon-192.png",
       });
     };
 
@@ -150,16 +153,7 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
       setReminders,
       setProfile,
     }),
-    [
-      state,
-      ready,
-      addDrink,
-      removeDrink,
-      setDailyGoal,
-      setQuickAmount,
-      setReminders,
-      setProfile,
-    ],
+    [state, ready, addDrink, removeDrink, setDailyGoal, setQuickAmount, setReminders, setProfile],
   );
 
   return <HydrationContext.Provider value={value}>{children}</HydrationContext.Provider>;
