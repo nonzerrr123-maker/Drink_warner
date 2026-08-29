@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calculator, Droplet, Sparkles, UserRound } from "lucide-react";
 
+import { CloudSyncCard } from "@/components/cloud-sync-card";
 import { useHydration } from "@/components/hydration-provider";
 import { MascotToast } from "@/components/mascot-toast";
 import { MobileShell } from "@/components/mobile-shell";
@@ -255,6 +256,8 @@ export function AppSettings() {
             ))}
           </div>
         </section>
+
+        <CloudSyncCard />
 
         <Link
           href="/onboarding"
