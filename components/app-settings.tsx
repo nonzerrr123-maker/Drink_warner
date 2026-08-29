@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Calculator, Droplet, UserRound } from "lucide-react";
+import { Calculator, Droplet, Sparkles, UserRound } from "lucide-react";
 
 import { useHydration } from "@/components/hydration-provider";
 import { MascotToast } from "@/components/mascot-toast";
@@ -138,7 +139,7 @@ export function AppSettings() {
             <h2 id="profile-title" className="text-sm font-semibold">ข้อมูลสำหรับเป้าหมายแนะนำ</h2>
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            ไม่บังคับกรอก ข้อมูลนี้เก็บไว้ในเบราว์เซอร์ของอุปกรณ์นี้เท่านั้นในเวอร์ชันปัจจุบัน
+            กรอกเฉพาะข้อมูลที่ต้องการใช้ช่วยคำนวณเป้าหมายโดยประมาณ
           </p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -215,7 +216,7 @@ export function AppSettings() {
           </div>
 
           <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-            ค่านี้เป็นตัวช่วยตั้งเป้าหมายของแอปจากน้ำหนัก อายุ และเพศ ไม่ใช่คำแนะนำทางการแพทย์ และยังไม่รวมอากาศ การออกกำลังกาย การตั้งครรภ์ โรคประจำตัว หรือยาที่อาจเปลี่ยนความต้องการน้ำ
+            ค่านี้เป็นตัวช่วยตั้งเป้าหมายจากน้ำหนัก อายุ และเพศ ไม่ใช่คำแนะนำทางการแพทย์ และความต้องการน้ำอาจเปลี่ยนตามกิจกรรม อากาศ การตั้งครรภ์ สุขภาพ หรือยาที่ใช้
           </p>
         </section>
 
@@ -255,12 +256,18 @@ export function AppSettings() {
           </div>
         </section>
 
-        <section className="mt-7 rounded-2xl border border-border p-4">
-          <p className="text-sm font-semibold">การเก็บข้อมูล</p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            ตอนนี้ Drink Warner เก็บเป้าหมาย ประวัติการดื่ม การเตือน และข้อมูลโปรไฟล์ไว้ใน localStorage ของเครื่องนี้ จึงไม่หายเมื่อ refresh แต่ยังไม่ sync ข้ามอุปกรณ์
-          </p>
-        </section>
+        <Link
+          href="/onboarding"
+          className="mt-7 flex items-center gap-3 rounded-2xl border border-border p-4 transition hover:bg-secondary/40"
+        >
+          <div className="flex size-9 items-center justify-center rounded-full bg-secondary text-primary">
+            <Sparkles className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">ตั้งค่าเริ่มต้นอีกครั้ง</p>
+            <p className="mt-1 text-xs text-muted-foreground">กลับไปเลือกเป้าหมายและช่วงเวลาเตือนกับ Dewy</p>
+          </div>
+        </Link>
       </div>
 
       <MascotToast
