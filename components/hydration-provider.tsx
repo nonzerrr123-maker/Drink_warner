@@ -32,6 +32,7 @@ type HydrationContextValue = {
   setQuickAmount: (index: number, amount: number) => void;
   setReminders: (next: Partial<ReminderSettings>) => void;
   setProfile: (next: Partial<UserProfile>) => void;
+  setOnboardingCompleted: (completed: boolean) => void;
 };
 
 const HydrationContext = createContext<HydrationContextValue | null>(null);
@@ -46,7 +47,7 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored) setState(mergeHydrationState(JSON.parse(stored)));
     } catch {
-      // Ignore malformed or unavailable local storage and continue with defaults.
+      // Fall back to defaults if local persisted data is unavailable.
     } finally {
       setReady(true);
     }
@@ -142,6 +143,13 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const setOnboardingCompleted = useCallback((completed: boolean) => {
+    setState((current) => ({
+      ...current,
+      onboardingCompleted: completed,
+    }));
+  }, []);
+
   const value = useMemo(
     () => ({
       state,
@@ -152,8 +160,19 @@ export function HydrationProvider({ children }: { children: React.ReactNode }) {
       setQuickAmount,
       setReminders,
       setProfile,
+      setOnboardingCompleted,
     }),
-    [state, ready, addDrink, removeDrink, setDailyGoal, setQuickAmount, setReminders, setProfile],
+    [
+      state,
+      ready,
+      addDrink,
+      removeDrink,
+      setDailyGoal,
+      setQuickAmount,
+      setReminders,
+      setProfile,
+      setOnboardingCompleted,
+    ],
   );
 
   return <HydrationContext.Provider value={value}>{children}</HydrationContext.Provider>;
