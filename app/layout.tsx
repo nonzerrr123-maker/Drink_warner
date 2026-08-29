@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 
+import { AppGate } from "@/components/app-gate";
 import { HydrationProvider } from "@/components/hydration-provider";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
@@ -39,7 +40,9 @@ export default function RootLayout({
     <html lang="th">
       <body>
         <PwaRegister />
-        <HydrationProvider>{children}</HydrationProvider>
+        <HydrationProvider>
+          <AppGate>{children}</AppGate>
+        </HydrationProvider>
       </body>
     </html>
   );
