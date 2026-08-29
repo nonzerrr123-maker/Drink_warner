@@ -1,13 +1,10 @@
 import webpush from "web-push";
 
-import { VAPID_PUBLIC_KEY, type PushSubscriptionPayload } from "@/lib/push";
-
-export function isPushServerConfigured() {
-  return Boolean(process.env.VAPID_PRIVATE_KEY);
-}
+import type { PushSubscriptionPayload, VapidKeys } from "@/lib/push";
 
 export async function sendWebPush(
   subscription: PushSubscriptionPayload,
+  vapid: VapidKeys,
   payload: {
     title: string;
     body: string;
@@ -15,13 +12,10 @@ export async function sendWebPush(
     tag?: string;
   },
 ) {
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!privateKey) throw new Error("VAPID_PRIVATE_KEY is not configured");
-
   webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT ?? "https://drinkwarner.vercel.app",
-    VAPID_PUBLIC_KEY,
-    privateKey,
+    "https://drinkwarner.vercel.app",
+    vapid.publicKey,
+    vapid.privateKey,
   );
 
   try {

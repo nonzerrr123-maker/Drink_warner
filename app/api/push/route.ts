@@ -1,18 +1,19 @@
 import { getRun, start } from "workflow/api";
 
 import type { ReminderSettings } from "@/lib/hydration";
-import { hydrationReminderWorkflow } from "@/lib/reminder-workflow";
-import {
-  VAPID_PUBLIC_KEY,
-  type PushSubscriptionPayload,
+import type {
+  PushSubscriptionPayload,
+  VapidKeys,
 } from "@/lib/push";
-import { isPushServerConfigured, sendWebPush } from "@/lib/push-server";
+import { sendWebPush } from "@/lib/push-server";
+import { hydrationReminderWorkflow } from "@/lib/reminder-workflow";
 
 export const runtime = "nodejs";
 
 type PushRequest = {
   action: "schedule" | "cancel" | "test";
   subscription?: PushSubscriptionPayload;
+  vapid?: VapidKeys;
   reminders?: ReminderSettings;
   timezone?: string;
   previousRunId?: string | null;
@@ -25,10 +26,15 @@ function sameOrigin(request: Request) {
 }
 
 function validSubscription(value: PushSubscriptionPayload | undefined) {
+  return Boolean(value?.endpoint && value.keys?.p256dh && value.keys?.auth);
+}
+
+function validVapid(value: VapidKeys | undefined) {
   return Boolean(
-    value?.endpoint &&
-      value.keys?.p256dh &&
-      value.keys?.auth,
+    value?.publicKey &&
+      value.publicKey.length >= 80 &&
+      value?.privateKey &&
+      value.privateKey.length >= 40,
   );
 }
 
@@ -37,15 +43,12 @@ async function cancelRun(runId?: string | null) {
   try {
     await getRun(runId).cancel();
   } catch {
-    // A completed, expired, or already-cancelled run does not block rescheduling.
+    // Completed, expired, or already-cancelled runs do not block rescheduling.
   }
 }
 
 export async function GET() {
-  return Response.json({
-    configured: isPushServerConfigured(),
-    publicKey: VAPID_PUBLIC_KEY,
-  });
+  return Response.json({ ready: true });
 }
 
 export async function POST(request: Request) {
@@ -60,28 +63,20 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.action) {
-    return Response.json({ error: "Missing action" }, { status: 400 });
-  }
-
   if (body.action === "cancel") {
     await cancelRun(body.previousRunId);
     return Response.json({ ok: true, runId: null });
   }
 
-  if (!isPushServerConfigured()) {
+  if (!validSubscription(body.subscription) || !validVapid(body.vapid)) {
     return Response.json(
-      { error: "Push server is not configured" },
-      { status: 503 },
+      { error: "Invalid push subscription or device key" },
+      { status: 400 },
     );
   }
 
-  if (!validSubscription(body.subscription)) {
-    return Response.json({ error: "Invalid push subscription" }, { status: 400 });
-  }
-
   if (body.action === "test") {
-    const delivered = await sendWebPush(body.subscription!, {
+    const delivered = await sendWebPush(body.subscription!, body.vapid!, {
       title: "Drink Warner พร้อมแล้ว 💧",
       body: "ถ้าเห็นข้อความนี้ แปลว่าการแจ้งเตือนบนเครื่องนี้ใช้งานได้แล้ว",
       url: "/reminders",
@@ -91,10 +86,8 @@ export async function POST(request: Request) {
     return Response.json({ ok: delivered });
   }
 
-  await cancelRun(body.previousRunId);
-
-  if (!body.reminders?.enabled) {
-    return Response.json({ ok: true, runId: null });
+  if (body.action !== "schedule" || !body.reminders) {
+    return Response.json({ error: "Invalid action" }, { status: 400 });
   }
 
   const intervalHours = Math.min(
@@ -103,7 +96,7 @@ export async function POST(request: Request) {
   );
 
   const reminders: ReminderSettings = {
-    enabled: true,
+    enabled: Boolean(body.reminders.enabled),
     intervalHours,
     startTime: /^\d{2}:\d{2}$/.test(body.reminders.startTime)
       ? body.reminders.startTime
@@ -113,9 +106,16 @@ export async function POST(request: Request) {
       : "22:00",
   };
 
+  await cancelRun(body.previousRunId);
+
+  if (!reminders.enabled) {
+    return Response.json({ ok: true, runId: null });
+  }
+
   const run = await start(hydrationReminderWorkflow, [
     {
       subscription: body.subscription!,
+      vapid: body.vapid!,
       reminders,
       timezone: body.timezone || "Asia/Bangkok",
     },

@@ -48,10 +48,7 @@ function getZonedParts(date: Date, timezone: string): ZonedParts {
   };
 }
 
-function localDateTimeToUtc(
-  local: ZonedParts,
-  timezone: string,
-) {
+function localDateTimeToUtc(local: ZonedParts, timezone: string) {
   const localAsUtc = Date.UTC(
     local.year,
     local.month - 1,
@@ -147,7 +144,7 @@ async function secondsUntilNextReminder(
 async function deliverReminder(input: ReminderWorkflowInput) {
   "use step";
 
-  return sendWebPush(input.subscription, {
+  return sendWebPush(input.subscription, input.vapid, {
     title: "ถึงเวลาดื่มน้ำแล้ว 💧",
     body: "พักสักครู่แล้วเติมน้ำให้ร่างกายกัน",
     url: "/",

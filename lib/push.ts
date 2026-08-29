@@ -1,9 +1,8 @@
 import type { ReminderSettings } from "@/lib/hydration";
 
-export const VAPID_PUBLIC_KEY =
-  "BAadfKaNKd0n4rFieFSq4Lfma-7-d2mpUAPF40GTQG8t1LfmfiQKU6mGh-YDeoOxQpm06FL-a9XsYWtTnuebV_o";
-
 export const PUSH_RUN_STORAGE_KEY = "drink-warner:push-run-id:v1";
+export const VAPID_KEYS_STORAGE_KEY = "drink-warner:vapid-keys:v1";
+export const PUSH_CONFIG_STORAGE_KEY = "drink-warner:push-config:v1";
 
 export type PushSubscriptionPayload = {
   endpoint: string;
@@ -14,8 +13,14 @@ export type PushSubscriptionPayload = {
   };
 };
 
+export type VapidKeys = {
+  publicKey: string;
+  privateKey: string;
+};
+
 export type ReminderWorkflowInput = {
   subscription: PushSubscriptionPayload;
+  vapid: VapidKeys;
   reminders: ReminderSettings;
   timezone: string;
 };
