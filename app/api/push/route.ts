@@ -2,6 +2,7 @@ import { getRun, start } from "workflow/api";
 
 import type { ReminderSettings } from "@/lib/hydration";
 import type {
+  HydrationPushContext,
   PushSubscriptionPayload,
   VapidKeys,
 } from "@/lib/push";
@@ -15,6 +16,7 @@ type PushRequest = {
   subscription?: PushSubscriptionPayload;
   vapid?: VapidKeys;
   reminders?: ReminderSettings;
+  hydration?: HydrationPushContext;
   timezone?: string;
   previousRunId?: string | null;
 };
@@ -36,6 +38,27 @@ function validVapid(value: VapidKeys | undefined) {
       value?.privateKey &&
       value.privateKey.length >= 40,
   );
+}
+
+function sanitizeHydration(value: HydrationPushContext | undefined): HydrationPushContext {
+  const capturedAt =
+    value?.capturedAt && !Number.isNaN(Date.parse(value.capturedAt))
+      ? value.capturedAt
+      : new Date().toISOString();
+  const lastDrinkAt =
+    value?.lastDrinkAt && !Number.isNaN(Date.parse(value.lastDrinkAt))
+      ? value.lastDrinkAt
+      : null;
+
+  return {
+    dayKey: /^\d{4}-\d{2}-\d{2}$/.test(value?.dayKey ?? "")
+      ? value!.dayKey
+      : capturedAt.slice(0, 10),
+    dailyGoal: Math.min(6000, Math.max(500, Math.round(Number(value?.dailyGoal) || 2000))),
+    waterToday: Math.min(20000, Math.max(0, Math.round(Number(value?.waterToday) || 0))),
+    lastDrinkAt,
+    capturedAt,
+  };
 }
 
 async function cancelRun(runId?: string | null) {
@@ -118,6 +141,7 @@ export async function POST(request: Request) {
       vapid: body.vapid!,
       reminders,
       timezone: body.timezone || "Asia/Bangkok",
+      hydration: sanitizeHydration(body.hydration),
     },
   ]);
 
