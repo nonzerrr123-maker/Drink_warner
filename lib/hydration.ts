@@ -121,7 +121,12 @@ export function calculateRecommendedGoal(profile: UserProfile) {
 }
 
 function timeToMinutes(value: string) {
-  const [hours, minutes] = value.split(":").map(Number);
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
   return hours * 60 + minutes;
 }
 
@@ -133,6 +138,8 @@ export function getNextReminderDate(
 
   const start = timeToMinutes(reminders.startTime);
   const end = timeToMinutes(reminders.endTime);
+  if (start === null || end === null || end <= start) return null;
+
   const interval = Math.max(1, reminders.intervalHours) * 60;
   const current = now.getHours() * 60 + now.getMinutes();
 
@@ -172,6 +179,8 @@ export function isReminderMoment(reminders: ReminderSettings, now = new Date()) 
 
   const start = timeToMinutes(reminders.startTime);
   const end = timeToMinutes(reminders.endTime);
+  if (start === null || end === null || end <= start) return false;
+
   const interval = Math.max(1, reminders.intervalHours) * 60;
   const current = now.getHours() * 60 + now.getMinutes();
 

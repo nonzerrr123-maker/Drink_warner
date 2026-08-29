@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { formatRelativeMinutes, getNextReminderDate } from "@/lib/hydration";
 
 export function ReminderSettingsScreen() {
-  const { state, setReminders } = useHydration();
+  const { state, ready, setReminders } = useHydration();
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   const [now, setNow] = useState(() => new Date());
 
@@ -22,6 +22,17 @@ export function ReminderSettingsScreen() {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  if (!ready) {
+    return (
+      <MobileShell>
+        <div className="px-5 pt-6">
+          <div className="h-7 w-24 animate-pulse rounded-lg bg-muted" />
+          <div className="mt-6 h-24 animate-pulse rounded-2xl bg-secondary/60" />
+        </div>
+      </MobileShell>
+    );
+  }
 
   const nextReminder = getNextReminderDate(state.reminders, now);
 
@@ -119,7 +130,7 @@ export function ReminderSettingsScreen() {
               ) : (
                 <div>
                   <p className="text-sm font-semibold">ไม่มีการเตือนที่กำลังทำงาน</p>
-                  <p className="mt-1 text-xs text-muted-foreground">เปิดการเตือนเพื่อดูเวลาครั้งถัดไป</p>
+                  <p className="mt-1 text-xs text-muted-foreground">เปิดการเตือนและตั้งช่วงเวลาให้เริ่มก่อนเวลาสิ้นสุด</p>
                 </div>
               )}
             </CardContent>

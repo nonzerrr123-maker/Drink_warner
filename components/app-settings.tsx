@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calculator, Droplet, UserRound } from "lucide-react";
 
 import { useHydration } from "@/components/hydration-provider";
@@ -17,8 +17,19 @@ const sexOptions: { value: Sex; label: string }[] = [
 ];
 
 export function AppSettings() {
-  const { state, setDailyGoal, setQuickAmount, setProfile } = useHydration();
+  const { state, ready, setDailyGoal, setQuickAmount, setProfile } = useHydration();
   const [goalDraft, setGoalDraft] = useState(String(state.dailyGoal));
+  const [quickDrafts, setQuickDrafts] = useState<[string, string, string]>([
+    String(state.quickAmounts[0]),
+    String(state.quickAmounts[1]),
+    String(state.quickAmounts[2]),
+  ]);
+
+  useEffect(() => {
+    if (!ready) return;
+    setGoalDraft(String(state.dailyGoal));
+    setQuickDrafts(state.quickAmounts.map(String) as [string, string, string]);
+  }, [ready, state.dailyGoal, state.quickAmounts]);
 
   const recommendedGoal = useMemo(
     () => calculateRecommendedGoal(state.profile),
@@ -27,8 +38,37 @@ export function AppSettings() {
 
   function saveGoalDraft() {
     const parsed = Number(goalDraft);
-    if (Number.isFinite(parsed) && parsed > 0) setDailyGoal(parsed);
-    else setGoalDraft(String(state.dailyGoal));
+    if (Number.isFinite(parsed) && parsed > 0) {
+      const normalized = Math.min(6000, Math.max(500, Math.round(parsed / 50) * 50));
+      setDailyGoal(normalized);
+      setGoalDraft(String(normalized));
+    } else {
+      setGoalDraft(String(state.dailyGoal));
+    }
+  }
+
+  function saveQuickAmount(index: number) {
+    const parsed = Number(quickDrafts[index]);
+    const normalized = Number.isFinite(parsed) && parsed > 0
+      ? Math.min(1500, Math.max(50, Math.round(parsed / 50) * 50))
+      : state.quickAmounts[index];
+    setQuickAmount(index, normalized);
+    setQuickDrafts((current) => {
+      const next = [...current] as [string, string, string];
+      next[index] = String(normalized);
+      return next;
+    });
+  }
+
+  if (!ready) {
+    return (
+      <MobileShell>
+        <div className="px-5 pt-6">
+          <div className="h-7 w-20 animate-pulse rounded-lg bg-muted" />
+          <div className="mt-6 h-24 animate-pulse rounded-2xl bg-muted" />
+        </div>
+      </MobileShell>
+    );
   }
 
   return (
@@ -151,7 +191,7 @@ export function AppSettings() {
           <p className="mt-1 text-xs text-muted-foreground">ตั้งปริมาณ 3 ปุ่มที่ใช้บ่อยบนหน้าแรก</p>
 
           <div className="mt-3 grid grid-cols-3 gap-2">
-            {state.quickAmounts.map((amount, index) => (
+            {state.quickAmounts.map((_, index) => (
               <label key={index} className="grid gap-1.5 text-center text-xs text-muted-foreground">
                 ปุ่ม {index + 1}
                 <Input
@@ -161,8 +201,16 @@ export function AppSettings() {
                   max={1500}
                   step={50}
                   className="px-2 text-center"
-                  value={amount}
-                  onChange={(event) => setQuickAmount(index, Number(event.target.value) || 50)}
+                  value={quickDrafts[index]}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/[^0-9]/g, "");
+                    setQuickDrafts((current) => {
+                      const next = [...current] as [string, string, string];
+                      next[index] = value;
+                      return next;
+                    });
+                  }}
+                  onBlur={() => saveQuickAmount(index)}
                 />
               </label>
             ))}

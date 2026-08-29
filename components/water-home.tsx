@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, ChevronRight, Clock3, Droplet, Minus, Plus, RotateCcw } from "lucide-react";
 
 import { MobileShell } from "@/components/mobile-shell";
@@ -79,7 +79,7 @@ function WaterProgress({ current, goal }: { current: number; goal: number }) {
 }
 
 export function WaterHome() {
-  const { state, addDrink, removeDrink } = useHydration();
+  const { state, ready, addDrink, removeDrink } = useHydration();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [amount, setAmount] = useState(250);
   const [undoLogId, setUndoLogId] = useState<string | null>(null);
@@ -107,13 +107,28 @@ export function WaterHome() {
     return () => window.clearTimeout(timer);
   }, [undoLogId]);
 
-  const statusText = useMemo(() => {
-    if (percentage >= 100) return "ครบเป้าหมายวันนี้แล้ว";
-    if (percentage >= 70) return "ใกล้ถึงเป้าหมายแล้ว";
-    if (percentage >= 40) return "กำลังไปได้ดี";
-    if (percentage > 0) return "ค่อย ๆ ดื่มให้สม่ำเสมอ";
-    return "เริ่มต้นด้วยน้ำแก้วแรกของวันนี้";
-  }, [percentage]);
+  if (!ready) {
+    return (
+      <MobileShell>
+        <div className="px-5 pt-6">
+          <div className="h-7 w-20 animate-pulse rounded-lg bg-muted" />
+          <div className="mt-2 h-4 w-32 animate-pulse rounded bg-muted" />
+          <div className="mx-auto mt-14 size-[184px] animate-pulse rounded-full bg-secondary/70" />
+        </div>
+      </MobileShell>
+    );
+  }
+
+  const statusText =
+    percentage >= 100
+      ? "ครบเป้าหมายวันนี้แล้ว"
+      : percentage >= 70
+        ? "ใกล้ถึงเป้าหมายแล้ว"
+        : percentage >= 40
+          ? "กำลังไปได้ดี"
+          : percentage > 0
+            ? "ค่อย ๆ ดื่มให้สม่ำเสมอ"
+            : "เริ่มต้นด้วยน้ำแก้วแรกของวันนี้";
 
   function recordDrink(nextAmount: number) {
     const log = addDrink(nextAmount);

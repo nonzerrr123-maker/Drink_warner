@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Droplet } from "lucide-react";
 
 import { useHydration } from "@/components/hydration-provider";
@@ -17,11 +17,22 @@ import {
 } from "@/lib/hydration";
 
 export function HydrationHistory() {
-  const { state } = useHydration();
+  const { state, ready } = useHydration();
   const [range, setRange] = useState<7 | 30>(7);
   const [selectedDate, setSelectedDate] = useState(() => dateKey());
 
-  const dateKeys = useMemo(() => getRecentDateKeys(range), [range]);
+  if (!ready) {
+    return (
+      <MobileShell>
+        <div className="px-5 pt-6">
+          <div className="h-7 w-24 animate-pulse rounded-lg bg-muted" />
+          <div className="mt-6 h-40 animate-pulse rounded-2xl bg-muted" />
+        </div>
+      </MobileShell>
+    );
+  }
+
+  const dateKeys = getRecentDateKeys(range);
   const totals = dateKeys.map((key) => getDayTotal(state, key));
   const totalAmount = totals.reduce((sum, amount) => sum + amount, 0);
   const average = Math.round(totalAmount / range);
